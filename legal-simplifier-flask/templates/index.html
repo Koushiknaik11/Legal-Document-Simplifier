@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal Document Simplifier</title>
+    <!-- Use a modern Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Legal Document Simplifier</h1>
+            <p class="subtitle">Understand complex legal jargon in seconds. Upload your document or paste text below to get started.</p>
+        </header>
+
+        <main>
+            <div class="input-section card">
+                <h2>Input Legal Text</h2>
+                <form id="simplifyForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="fileUpload" class="file-upload-label">
+                            <span id="fileName">Upload .txt or .pdf file</span>
+                            <input type="file" id="fileUpload" name="file" accept=".txt, .pdf">
+                        </label>
+                    </div>
+                    
+                    <div class="divider">OR</div>
+                    
+                    <div class="form-group">
+                        <textarea id="textInput" name="text" placeholder="Paste your complex legal text here..." rows="8"></textarea>
+                    </div>
+
+                    <div class="form-group language-select">
+                        <label>Output Language:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="target_language" value="en" checked>
+                                English
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="target_language" value="hi">
+                                Hindi
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" id="processBtn" class="btn primary-btn">
+                            <span class="btn-text">Simplify & Summarize</span>
+                            <div class="spinner hidden"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="resultsSection" class="results-section hidden">
+                <div class="card result-card summary-card">
+                    <h2><span class="icon">📝</span> Short Summary</h2>
+                    <p id="summaryResult">Your summary will appear here.</p>
+                </div>
+
+                <div class="card result-card simplify-card">
+                    <h2><span class="icon">✨</span> Simplified Text</h2>
+                    <p id="simplifiedResult">Your simplified text will appear here.</p>
+                </div>
+
+                <div class="card result-card keyword-card">
+                    <h2><span class="icon">🔍</span> Difficult Words & Meanings</h2>
+                    <ul id="keywordResult" class="keyword-list">
+                        <!-- Keywords will be populated here -->
+                    </ul>
+                </div>
+            </div>
+        </main>
+        
+        <footer>
+            <p>Powered by Flask, spaCy, and Hugging Face Transformers</p>
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById('fileUpload').addEventListener('change', function(e) {
+            const fileName = e.target.files[0] ? e.target.files[0].name : "Upload .txt or .pdf file";
+            document.getElementById('fileName').textContent = fileName;
+        });
+
+        document.getElementById('simplifyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('fileUpload');
+            const textInput = document.getElementById('textInput');
+            
+            if (!fileInput.files.length && !textInput.value.trim()) {
+                alert("Please upload a file or enter some text.");
+                return;
+            }
+
+            const formData = new FormData();
+            if (fileInput.files.length > 0) {
+                formData.append('file', fileInput.files[0]);
+            } else {
+                formData.append('text', textInput.value);
+            }
+            
+            // Add language
+            const targetLanguage = document.querySelector('input[name="target_language"]:checked').value;
+            formData.append('target_language', targetLanguage);
+
+            // Show loading state
+            const processBtn = document.getElementById('processBtn');
+            const btnText = processBtn.querySelector('.btn-text');
+            const spinner = processBtn.querySelector('.spinner');
+            
+            btnText.textContent = "Processing... (This might take a minute)";
+            spinner.classList.remove('hidden');
+            processBtn.disabled = true;
+            
+            // Hide previous results
+            document.getElementById('resultsSection').classList.add('hidden');
+
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Populate results
+                    document.getElementById('summaryResult').textContent = data.summary;
+                    document.getElementById('simplifiedResult').textContent = data.simplified_text;
+                    
+                    const keywordList = document.getElementById('keywordResult');
+                    keywordList.innerHTML = '';
+                    
+                    if (Object.keys(data.keywords).length === 0) {
+                        keywordList.innerHTML = '<li><span class="term">No complex legal terms found.</span></li>';
+                    } else {
+                        for (const [term, meaning] of Object.entries(data.keywords)) {
+                            const li = document.createElement('li');
+                            li.innerHTML = `<span class="term">${term}:</span> <span class="meaning">${meaning}</span>`;
+                            keywordList.appendChild(li);
+                        }
+                    }
+                    
+                    // Show results section
+                    document.getElementById('resultsSection').classList.remove('hidden');
+                    
+                    // Scroll to results
+                    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert(data.error || "An error occurred while processing the document.");
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert("An error occurred. Make sure the backend is running.");
+            } finally {
+                // Reset button state
+                btnText.textContent = "Simplify & Summarize";
+                spinner.classList.add('hidden');
+                processBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
